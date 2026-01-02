@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
@@ -20,6 +20,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Link } from "@tanstack/react-router";
 
 export const FakeDataSchema = z.object({
   id: z.number().nonnegative(),
@@ -49,7 +50,7 @@ export const postNewTodo = createServerFn({ method: "POST" })
     const exiestID = fakeData.some((todo) => todo.id == data.id);
     if (exiestID) return { message: "the ID is already exiest" };
     fakeData.push(data);
-    return { message: "New todo added" };
+    return { ok: true, message: "New todo added" };
   });
 
 export const deleteTodo = createServerFn({ method: "POST" })
@@ -102,10 +103,14 @@ function RouteComponent() {
         completed: false,
       };
       try {
-        const result = await postNewTodo({ data: newTodo });
-        console.log(result.message, value);
-        form.reset();
+        const res = await postNewTodo({ data: newTodo });
+        console.log(res.message, value);
+        if (res.ok) {
+          form.reset();
+          throw redirect({ to: "/server/result" });
+        }
       } catch (err) {
+        if (isRedirect(err)) throw err;
         console.error("Failed to post:", err);
       }
     },
@@ -170,6 +175,10 @@ function RouteComponent() {
           </Field>
         </CardFooter>
       </Card>
+
+      <Link to="/server/result">
+        <Button className="m-16 ">Goto to server result</Button>
+      </Link>
     </div>
   );
 }

@@ -17,7 +17,6 @@ import {
   completedTodos,
   type fakeDataProps,
 } from "./index";
-import { useEffect } from "react";
 
 export const Route = createFileRoute("/server/result")({
   component: RouteComponent,
@@ -30,7 +29,6 @@ export const Route = createFileRoute("/server/result")({
 function RouteComponent() {
   const queryClient = useQueryClient();
   const loaderData = Route.useLoaderData();
-  const bc = new BroadcastChannel("todo_channel");
 
   const { data: todos = [] } = useQuery({
     queryKey: ["todos"],
@@ -59,20 +57,29 @@ function RouteComponent() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
-      bc.postMessage("update_list");
     },
   });
 
-  useEffect(() => {
-    bc.onmessage = () => {
+  const handleDeleteMutation = useMutation({
+    mutationFn: (id: number) => deleteTodo({ data: { id } }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ["todos"] });
+      const previous = queryClient.getQueryData<fakeDataProps[]>(["todos"]);
+      queryClient.setQueryData(
+        ["todos"],
+        (old: fakeDataProps[] | undefined) => {
+          old?.filter((t) => t.id !== id);
+        }
+      );
+      return { previous };
+    },
+    onError: (_, __, context) => {
+      queryClient.setQueryData(["todos"], context?.previous);
+    },
+    onSettled() {
       queryClient.invalidateQueries({ queryKey: ["todos"] });
-    };
-  }, []);
-
-  const handleDelete = async (id: number) => {
-    await deleteTodo({ data: { id } });
-    queryClient.invalidateQueries({ queryKey: ["todos"] });
-  };
+    },
+  });
 
   return (
     <div className="container mx-auto py-10 flex flex-col items-center gap-6">
@@ -110,7 +117,7 @@ function RouteComponent() {
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 text-destructive hover:bg-destructive/10"
-                  onClick={() => handleDelete(todo.id)}
+                  onClick={() => handleDeleteMutation.mutate(todo.id)}
                 >
                   <Trash2 className="h-5 w-5" />
                 </Button>
