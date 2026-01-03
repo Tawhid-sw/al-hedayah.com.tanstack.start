@@ -1,4 +1,4 @@
-import { createFileRoute, isRedirect, redirect } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
@@ -22,6 +22,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Link } from "@tanstack/react-router";
 
+import { useQueryClient } from "@tanstack/react-query";
+
 export const FakeDataSchema = z.object({
   id: z.number().nonnegative(),
   title: z.string().min(2),
@@ -33,7 +35,7 @@ export type fakeDataProps = z.infer<typeof FakeDataSchema>;
 export const fakeData: fakeDataProps[] = [
   {
     id: 1,
-    title: "Home Work",
+    title: "Home Works",
     completed: false,
   },
 ];
@@ -87,6 +89,8 @@ export const Route = createFileRoute("/server/")({
 });
 
 function RouteComponent() {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const form = useForm({
     defaultValues: {
       title: "",
@@ -102,15 +106,19 @@ function RouteComponent() {
         title: value.title,
         completed: false,
       };
+      await queryClient.cancelQueries({ queryKey: ["todos"] });
+      queryClient.setQueryData(["todos"], (old: fakeDataProps[] | undefined) =>
+        old ? [...old, newTodo] : [newTodo]
+      );
       try {
         const res = await postNewTodo({ data: newTodo });
         console.log(res.message, value);
         if (res.ok) {
           form.reset();
-          throw redirect({ to: "/server/result" });
+          navigate({ to: "/server/result" });
         }
       } catch (err) {
-        if (isRedirect(err)) throw err;
+        queryClient.invalidateQueries({ queryKey: ["todos"] });
         console.error("Failed to post:", err);
       }
     },
