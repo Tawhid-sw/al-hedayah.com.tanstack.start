@@ -12,17 +12,17 @@ import { Badge } from "@/components/ui/badge";
 // Logic Imports
 import {
   getTodos,
-  FakeDataSchema,
   deleteTodo,
   completedTodos,
-  type fakeDataProps,
+  type TodoDataProps,
 } from "./index";
+import { selectTodoSchema } from "@/db/schema";
 
 export const Route = createFileRoute("/server/result")({
   component: RouteComponent,
   loader: async () => {
     const todos = await getTodos();
-    return z.array(FakeDataSchema).parse(todos);
+    return z.array(selectTodoSchema).parse(todos);
   },
 });
 
@@ -41,11 +41,11 @@ function RouteComponent() {
     mutationFn: (id: number) => completedTodos({ data: { id } }),
     onMutate: async (id: number) => {
       await queryClient.cancelQueries({ queryKey: ["todos"] });
-      const previous = queryClient.getQueryData<fakeDataProps[]>(["todos"]);
+      const previous = queryClient.getQueryData<TodoDataProps[]>(["todos"]);
       queryClient.setQueryData(
         ["todos"],
-        (old: fakeDataProps[] | undefined) => {
-          old?.map((t) =>
+        (old: TodoDataProps[] | undefined) => {
+          return old?.map((t) =>
             t.id === id ? { ...t, completed: !t.completed } : t
           );
         }
@@ -64,10 +64,10 @@ function RouteComponent() {
     mutationFn: (id: number) => deleteTodo({ data: { id } }),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ["todos"] });
-      const previous = queryClient.getQueryData<fakeDataProps[]>(["todos"]);
+      const previous = queryClient.getQueryData<TodoDataProps[]>(["todos"]);
       queryClient.setQueryData(
         ["todos"],
-        (old: fakeDataProps[] | undefined) => {
+        (old: TodoDataProps[] | undefined) => {
           old?.filter((t) => t.id !== id);
         }
       );

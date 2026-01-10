@@ -2,9 +2,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
+import { insertTodoSchema, selectTodoSchema, todoTable } from "@/db/schema";
+import { db } from "@/db";
 
 import { Button } from "@/components/ui/button";
-
 import {
   Card,
   CardContent,
@@ -23,36 +24,35 @@ import { Input } from "@/components/ui/input";
 import { Link } from "@tanstack/react-router";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { eq } from "drizzle-orm";
 
-export const FakeDataSchema = z.object({
-  id: z.number().nonnegative(),
-  title: z.string().min(2),
-  completed: z.boolean().nonoptional(),
-});
-
-export type fakeDataProps = z.infer<typeof FakeDataSchema>;
-
-export const fakeData: fakeDataProps[] = [
-  {
-    id: 1,
-    title: "Home Works",
-    completed: false,
-  },
-];
-
-export const fakeDataIdSchema = z.number().nonnegative();
-
-export const getTodos = createServerFn({ method: "GET" }).handler(async () => {
-  return [...fakeData];
-});
+export type TodoDataProps = z.infer<typeof selectTodoSchema>;
+export const TodoDataIdSchema = z.number().nonnegative();
 
 export const postNewTodo = createServerFn({ method: "POST" })
-  .inputValidator(FakeDataSchema)
+  .inputValidator(insertTodoSchema)
   .handler(async ({ data }) => {
-    const exiestID = fakeData.some((todo) => todo.id == data.id);
-    if (exiestID) return { message: "the ID is already exiest" };
-    fakeData.push(data);
+    await db.insert(todoTable).values(data);
     return { ok: true, message: "New todo added" };
+  });
+
+export const getTodos = createServerFn({ method: "GET" }).handler(async () => {
+  return await db.select().from(todoTable);
+});
+
+export const completedTodos = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      id: z.number(),
+    })
+  )
+  .handler(async ({ data }) => {
+    const updateTodo = await db
+      .update(todoTable)
+      .set({ completed: true })
+      .where(eq(todoTable.id, data.id));
+    if (!updateTodo) throw new Error("Todo not found");
+    return { ok: true, message: "Todo updated" };
   });
 
 export const deleteTodo = createServerFn({ method: "POST" })
@@ -62,26 +62,8 @@ export const deleteTodo = createServerFn({ method: "POST" })
     })
   )
   .handler(async ({ data }) => {
-    const index = fakeData.findIndex((todo) => todo.id === data.id);
-    if (index > -1) {
-      fakeData.splice(index, 1);
-    }
+    await db.delete(todoTable).where(eq(todoTable.id, data.id));
     return { message: "The task is deleted" };
-  });
-
-export const completedTodos = createServerFn({ method: "POST" })
-  .inputValidator(
-    z.object({
-      id: z.number(),
-    })
-  )
-  .handler(async ({ data }) => {
-    const todo = fakeData.find((t) => t.id === data.id)!;
-    if (todo) {
-      todo.completed = !todo.completed;
-      return { message: "Update the work" };
-    }
-    throw new Error("Todo not found");
   });
 
 export const Route = createFileRoute("/server/")({
@@ -96,18 +78,14 @@ function RouteComponent() {
       title: "",
     },
     validators: {
-      onChange: z.object({
-        title: z.string().min(2, "Title is too short"),
-      }),
+      onChange: insertTodoSchema,
     },
     onSubmit: async ({ value }) => {
-      const newTodo: fakeDataProps = {
-        id: Math.floor(Math.random() * 9999999999),
+      const newTodo = {
         title: value.title,
-        completed: false,
       };
       await queryClient.cancelQueries({ queryKey: ["todos"] });
-      queryClient.setQueryData(["todos"], (old: fakeDataProps[] | undefined) =>
+      queryClient.setQueryData(["todos"], (old: TodoDataProps[] | undefined) =>
         old ? [...old, newTodo] : [newTodo]
       );
       try {
