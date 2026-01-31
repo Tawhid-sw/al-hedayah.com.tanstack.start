@@ -3,7 +3,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { useNavigate } from "@tanstack/react-router";
-import { db } from "@/db/index";
+import { getDB } from "@/db/index";
 // import { eq } from "drizzle-orm";
 import { todoTable } from "@/db/schema";
 
@@ -17,11 +17,13 @@ const validateTodoTitle = z.object({
 export const postTodo = createServerFn({ method: "POST" })
   .inputValidator(validateTodoTitle)
   .handler(async ({ data }) => {
+    const db = getDB(process.env.DATABASE_URL!);
     await db.insert(todoTable).values({ title: data.title });
     return { message: "New todo added", status: 200, ok: true };
   });
 
 export const getTodos = createServerFn().handler(async () => {
+  const db = getDB(process.env.DATABASE_URL!);
   const allTodos = await db.select().from(todoTable);
   return allTodos;
 });
