@@ -3,40 +3,27 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { useNavigate } from "@tanstack/react-router";
+import { db } from "@/db/index";
+// import { eq } from "drizzle-orm";
+import { todoTable } from "@/db/schema";
 
-const validateTodo = z.object({
-  title: z.string().min(3, "Todo title must be 3 char atleast"),
+const validateTodoTitle = z.object({
+  title: z
+    .string()
+    .min(3, "Todo title must be 3 char atleast")
+    .max(255, "Todo title cannot be 255 char longer"),
 });
-
-export const fakeDBSchema = z.object({
-  id: z.number().nonnegative(),
-  title: z.string().min(3, "Todo title must be 3 char atleast").nonoptional(),
-  isCompleted: z.boolean().default(false),
-});
-export type fakeDBProps = z.infer<typeof fakeDBSchema>;
-
-const fakeDB: fakeDBProps[] = [
-  {
-    id: 1,
-    title: "1st todo",
-    isCompleted: false,
-  },
-];
 
 export const postTodo = createServerFn({ method: "POST" })
-  .inputValidator(validateTodo)
+  .inputValidator(validateTodoTitle)
   .handler(async ({ data }) => {
-    const newData = {
-      id: Date.now(),
-      title: data.title,
-      isCompleted: false,
-    };
-    fakeDB.push(newData);
+    await db.insert(todoTable).values({ title: data.title });
     return { message: "New todo added", status: 200, ok: true };
   });
 
 export const getTodos = createServerFn().handler(async () => {
-  return fakeDB;
+  const allTodos = await db.select().from(todoTable);
+  return allTodos;
 });
 
 export const Route = createFileRoute("/server/")({
@@ -52,7 +39,7 @@ function RouteComponent() {
       title: "",
     },
     validators: {
-      onSubmit: validateTodo,
+      onSubmit: validateTodoTitle,
     },
     onSubmit: async ({ value }) => {
       const res = await postTodo({
